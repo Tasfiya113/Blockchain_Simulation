@@ -1,0 +1,158 @@
+import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+
+// Represents a single block in the blockchain
+class Block {
+    public int index;                   // Block index in the blockchain
+    public long timestamp;              // Timestamp when the block is created
+    public List<String> transactions;   // List of transactions in this block
+    public String previousHash;         // Hash of the previous block in the chain
+    public int nonce;                   // Nonce used for mining the block
+    public String hash;                 // Current block's hash
+
+    // Constructor initializes the block and computes its initial hash.
+    public Block(int index, List<String> transactions, String previousHash) {
+        this.index = index;
+        this.timestamp = System.currentTimeMillis();
+        this.transactions = new ArrayList<>(transactions);
+        this.previousHash = previousHash;
+        this.nonce = 0;
+        this.hash = computeHash();
+    }
+
+    // Computes the SHA-256 hash based on the block's data.
+    public String computeHash() {
+        try {
+            String data = index + timestamp + transactions.toString() + previousHash + nonce;
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashBytes = digest.digest(data.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hashBytes) {
+                hexString.append(String.format("%02x", b));
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // Mines the block by finding a hash that starts with a certain number of zeros.
+    public void mineBlock(int difficulty) {
+        String target = "0".repeat(difficulty);
+        while (!hash.substring(0, difficulty).equals(target)) {
+            nonce++;
+            hash = computeHash();
+        }
+    }
+    
+    // Overrides toString() to provide a detailed representation of the block.
+    @Override
+    public String toString() {
+        return "Block " + index + " {" +
+               "\n  Timestamp: " + timestamp +
+               "\n  Transactions: " + transactions +
+               "\n  Previous Hash: " + previousHash +
+               "\n  Hash: " + hash +
+               "\n  Nonce: " + nonce +
+               "\n}";
+    }
+}
+
+// Manages the blockchain by handling blocks, transactions, and chain validation.
+class Blockchain {
+    private final List<Block> chain;           // List of blocks in the blockchain
+    private final List<String> transactions;     // List of pending transactions
+    private final int difficulty;                // Mining difficulty (number of leading zeros required)
+
+    // Constructor creates a new blockchain and initializes it with the genesis block.
+    public Blockchain(int difficulty) {
+        this.chain = new ArrayList<>();
+        this.transactions = new ArrayList<>();
+        this.difficulty = difficulty;
+        createGenesisBlock();
+    }
+
+    // Creates the first block (genesis block) of the blockchain.
+    private void createGenesisBlock() {
+        Block genesisBlock = new Block(0, List.of("Genesis Block"), "0");
+        genesisBlock.mineBlock(difficulty);
+        chain.add(genesisBlock);
+    }
+
+    // Adds a new transaction to the list of pending transactions.
+    public void addTransaction(String transaction) {
+        transactions.add(transaction);
+    }
+
+    // Creates a new block with pending transactions, mines it, and adds it to the chain.
+    public void addBlock() {
+        Block previousBlock = chain.get(chain.size() - 1);
+        Block newBlock = new Block(chain.size(), new ArrayList<>(transactions), previousBlock.hash);
+        newBlock.mineBlock(difficulty);
+        chain.add(newBlock);
+        transactions.clear();  // Clear pending transactions after adding a block
+    }
+
+    // Validates the blockchain by checking the hash values and linkages between blocks.
+    public boolean isChainValid() {
+        for (int i = 1; i < chain.size(); i++) {
+            Block current = chain.get(i);
+            Block previous = chain.get(i - 1);
+
+            // Check if the current block's hash matches its computed hash.
+            if (!current.hash.equals(current.computeHash())) {
+                return false;
+            }
+            // Check if the current block points to the correct previous block's hash.
+            if (!current.previousHash.equals(previous.hash)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Simulates tampering with a block by modifying its transactions and recomputing the hash.
+    public void tamperBlock(int index, List<String> newData) {
+        if (index > 0 && index < chain.size()) {
+            chain.get(index).transactions = new ArrayList<>(newData);
+            chain.get(index).hash = chain.get(index).computeHash();
+        }
+    }
+
+    // Prints out all the blocks in the blockchain.
+    public void printChain() {
+        for (Block block : chain) {
+            System.out.println(block);  // This calls the overridden toString() method
+            System.out.println("-");
+        }
+    }
+}
+
+// Main class to run the blockchain simulation.
+public class BlockchainSimulation {
+    public static void main(String[] args) {
+        // Create a blockchain with a specified mining difficulty (e.g., 2 leading zeros)
+        Blockchain blockchain = new Blockchain(2);
+        
+        // Add transactions and mine blocks
+        blockchain.addTransaction("Alice pays Bob 5 BTC");
+        blockchain.addBlock();
+        blockchain.addTransaction("Bob pays Charlie 2 BTC");
+        blockchain.addBlock();
+
+        // Display the blockchain before tampering
+        System.out.println("Blockchain before tampering:");
+        blockchain.printChain();
+        System.out.println("Is blockchain valid? " + blockchain.isChainValid());
+
+        // Tamper with a block (simulate a malicious attack)
+        blockchain.tamperBlock(1, List.of("Hacker steals 100 BTC"));
+
+        // Display the blockchain after tampering
+        System.out.println("\nBlockchain after tampering:");
+        blockchain.printChain();
+        System.out.println("Is blockchain valid? " + blockchain.isChainValid());
+    }
+}
